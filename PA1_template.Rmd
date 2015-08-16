@@ -1,0 +1,142 @@
+---
+title: "PA1_template.Rmd"
+author: "Carlos Rodriguez-Contreras"
+date: "August 16, 2015"
+output: 
+  html_document: 
+    keep_md: yes
+---
+# Data Science Specialization
+## Johns Hopkins University - Coursera
+### Reproducible Research
+### Assessment 1 
+Carlos Rodriguez-Contreras  
+
+This R Markdown document corresponds to the first peer assessment of the course Reproducible Research.  
+
+## Loading and preprocessing the data  
+
+```{r loadingData}
+datasetURL <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+download.file(datasetURL, destfile = "zippedFile.zip", method = "curl")
+
+# Unzip the dataset into work directory:
+unzip("zippedFile.zip")
+list.files()
+Activity.Monitoring.Data <- read.csv("activity.csv", header = TRUE, na.strings = "NA")
+str(Activity.Monitoring.Data)
+Activity.Monitoring.Data$date = as.Date(as.character(Activity.Monitoring.Data$date), format = "%Y-%m-%d")
+
+# Eliminating NA values from whole dataset:
+library(Hmisc)
+AMDwoNA <- na.delete(Activity.Monitoring.Data)
+head(AMDwoNA)
+```
+
+## Mean total numbers of steps taken per day  
+
+The dataframe *AMDwoNA* is splitted by date, then for each day the number of steps recorded in 5 min intervals are accumulated.
+
+```{r, preprocessing1}
+daily <- split(AMDwoNA, AMDwoNA$date)
+dailySteps <- lapply(daily, function(x) {sum(x$steps)} )
+dailySteps <- as.numeric(dailySteps)
+```
+
+### Generation of the Histogram without Missing Values:
+
+```{r histogram1}
+opar <- par()
+par(bg = "cornsilk")
+hist(dailySteps, xlab = "Number of Steps", main = "Total Steps per Day removing NA", labels = TRUE, ylim = c(0, 30), col = "lavender")
+```
+
+### Computing the Mean and the Median of the steps without missing values:
+
+```{r meanMedian}
+paste("The Mean of the total number of steps taken per day is:", round(mean(dailySteps), 2))
+paste("The Median of the total number of steps taken per day is:", round(median(dailySteps), 2))
+```
+
+## Average daily activity pattern
+
+The dataframe *AMDwoNA* is splitted by interval, then for each interval the mean of steps recorded are computed.
+
+```{r dailiActivity}
+AMDwoNA$interval <- as.factor(AMDwoNA$interval)
+interval <- split(AMDwoNA, AMDwoNA$interval)
+intervalSteps <- lapply(interval, function(x) {mean(x$steps)} )
+intervalSteps <- as.numeric(intervalSteps)
+interval <- as.numeric(levels(AMDwoNA$interval))
+```
+
+### Generation of the Time Series plot of intervals - average of steps:
+
+```{r timeSeriesPlot}
+par(bg = "cornsilk")
+plot(interval, intervalSteps, type = "l", main = "Average Daily Activity Pattern", xlab = "Intervals", ylab = "Average of steps by interval", col ="darkblue")
+```
+
+### Computing the interval with the maximum number of steps:
+
+```{r maxSteps}
+newTable <- as.data.frame(cbind(interval, intervalSteps))
+mostActiveInterval <- newTable[which(newTable$intervalSteps == max(newTable$intervalSteps)), ]
+paste ("The most active interval is", mostActiveInterval$interval, "with", mostActiveInterval$intervalSteps)
+```
+
+## Imputing missing values
+
+Identifying the NA (missing values) from the original data set *Activity.Monitoring.Data* computing the ammount of NA and impute them with the mean of the interval.
+
+```{r missingValues}
+AMDimputedNA <- Activity.Monitoring.Data
+missingValues <- is.na(AMDimputedNA$steps)
+paste("The total number of missing values is", sum(missingValues))
+AMDimputedNA[missingValues, ]$steps <- intervalSteps
+```
+
+### Generating a Histogram with NA filled in:
+
+```{r histogram2}
+daily2 <- split(AMDimputedNA, AMDimputedNA$date)
+dailySteps2 <- lapply(daily2, function(x) {sum(x$steps)} )
+dailySteps2 <- as.numeric(dailySteps2)
+
+# Creating the histogram for Total Steps per Day:
+opar <- par()
+par(bg = "cornsilk")
+hist(dailySteps2, xlab = "Number of Steps", main = "Total Steps per Day imputing NA", labels = TRUE, ylim = c(0, 40), col = "lavender")
+```
+
+### Computing the Mean and the Median of the steps with missing values:
+
+```{r meanMedian2}
+paste("The Mean of the total number of steps taken per day is:", round(mean(dailySteps2), 2))
+paste("The Median of the total number of steps taken per day is:", round(median(dailySteps2), 2))
+```
+
+It is noticed that there is a little impact of imputing missing data, this is in part for being 10% approx. This also means that using the mean as imputation method is quite acceptable.
+
+## Differences in activity patterns between weekdays and weekends
+
+For this to be computed, it is used the *weekdays()* function, in this particular case, names of days are displayed in Spanish and so, the computations used special characters (UTF-8 set of characters). Anyway, the results must be correct.
+
+```{r weekdays}
+daysOfWeek <- as.list(weekdays(AMDimputedNA$date))
+TypeOfDays <- lapply(daysOfWeek, function(x){
+    if (x != "sábado" & x != "domingo") x <- "Weekday"
+    else x <- "Weekend"
+})
+
+AMDimputedNA$type <- as.factor(as.character(TypeOfDays))
+```
+
+### Genaration of plots using ggplot2:
+
+```{r weekdaysGraph}
+library(ggplot2)
+qplot(interval, steps, data = AMDimputedNA, geom = "line", facets = type ~ . , main = "Comparison between Weekdays and Weekends")
+```
+
+It is noticed that during Weekends the steps pattern is more uniform which means more people are involved in some kind of fitness activities.
